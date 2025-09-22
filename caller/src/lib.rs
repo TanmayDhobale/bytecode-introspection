@@ -5,6 +5,20 @@ mod middleware_guard;
 
 entrypoint!(process_instruction);
 
+const PROGRAMDATA_TAG: u8 = 0x03;
+const PROGRAMDATA_HEADER_LEN: usize = 45;
+
+#[inline(always)]
+fn executable_elf_offset(data: &[u8]) -> Result<usize, ProgramError> {
+    if data.len() < PROGRAMDATA_HEADER_LEN + 1 {
+        return Err(ProgramError::InvalidAccountData);
+    }
+    if data[0] != PROGRAMDATA_TAG {
+        return Err(ProgramError::InvalidAccountData);
+    }
+    Ok(PROGRAMDATA_HEADER_LEN)
+}
+
 fn process_instruction(
     _program_id: &Pubkey,      // Public key of the account the program was loaded into
     accounts: &[AccountInfo], // All accounts required to process the instruction
@@ -16,7 +30,9 @@ fn process_instruction(
 
     verify_executable_account(program, executable, &LOADER_V3)?;
     
-    let executable_data = &executable.try_borrow_data()?[45..];
+    let data_ref = executable.try_borrow_data()?;
+    let off = executable_elf_offset(&data_ref)?;
+    let executable_data = &data_ref[off..];
     
     middleware_guard::gm(executable_data)?;
 
